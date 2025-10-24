@@ -47,14 +47,3 @@ python cli.py list-patients
 python cli.py add-patient --first "Alex" --last "Green" --dob 1990-05-01 --phone "555-0103"
 python cli.py schedule-appointment --patient-id 1 --doctor-id 1 --datetime "2025-10-24 10:30" --reason "Checkup"
 ```
-
-Notes and next steps
-- You can extend schema (lab results, insurance claims) and add triggers (e.g., auto-create a bill when a visit is closed).
-- The web UI is intentionally minimal to keep the project compact for a DBMS course.
-
-If you'd like, I can now:
-- add more sample data
-- implement additional reports (billing summary, doctor workload)
-- generate an ER diagram image
-
-Tell me what you want next.
