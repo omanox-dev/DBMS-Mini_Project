@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Doctor Workload (next 7 days)</h2>
+  <table class="table table-striped">
+    <thead><tr><th>Doctor</th><th>Upcoming Appointments</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r['doctor_name'] }}</td>
+        <td>{{ r['upcoming_appointments'] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

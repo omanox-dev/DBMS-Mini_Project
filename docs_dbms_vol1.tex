@@ -1,0 +1,278 @@
+% DBMS Volume 1 - Basics used in the Healthcare Mini DBMS project
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{longtable}
+\usepackage{footnote}
+\usepackage{titlesec}
+\geometry{margin=1in}
+
+\definecolor{codebg}{rgb}{0.95,0.95,0.95}
+\lstset{backgroundcolor=\color{codebg},basicstyle=\ttfamily\small,breaklines=true}
+
+\title{DBMS Volume 1: Basic Database Concepts used in the Healthcare Mini DBMS}
+\author{Project: Healthcare Mini DBMS\\Volume 1: Core DBMS Concepts}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\thispagestyle{empty}
+\newpage
+
+\section*{Preface}
+This first volume covers the basic database (DBMS) concepts used in the Healthcare Mini DBMS project. Each chapter gives a short theory section, then shows the exact syntax used in the project (with file locations), and finally explains how the project implements or uses that feature.
+
+File locations referenced below are relative to the project root (e.g. \texttt{schema.sql}, \texttt{app.py}, \texttt{cli.py}, \texttt{init_db.py}, \texttt{migrate_db.py}, \texttt{seed_data.py}).
+
+\section{Relational Model and Schema}
+\subsection{Theory}
+The relational model represents data as tables (relations) with rows (tuples) and columns (attributes). A schema defines tables, their columns and types, and constraints (keys, foreign keys, uniqueness).
+
+Key concepts:
+\begin{itemize}
+  \item Table (relation): collection of rows with same columns.
+  \item Primary key (PK): unique identifier for rows.
+  \item Foreign key (FK): column that references a PK in another table.
+  \item Data types: TEXT, INTEGER, REAL, DATETIME, DATE in SQLite.
+\end{itemize}
+
+\subsection{Exact syntax used (schema)}
+The project's schema is in \texttt{schema.sql}. Below is a representative example (exact file: \texttt{schema.sql}):
+\begin{lstlisting}
+CREATE TABLE patients (
+    patient_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    dob DATE,
+    gender TEXT,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    insurance TEXT
+);
+\end{lstlisting}
+
+Another example showing a foreign key and ON DELETE behavior (also in \texttt{schema.sql}):
+\begin{lstlisting}
+CREATE TABLE visits (
+    visit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    appointment_id INTEGER,
+    patient_id INTEGER NOT NULL,
+    doctor_id INTEGER NOT NULL,
+    visit_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    diagnosis TEXT,
+    notes TEXT,
+    FOREIGN KEY (appointment_id) REFERENCES appointments(appointment_id) ON DELETE SET NULL,
+    FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES doctors(doctor_id) ON DELETE CASCADE
+);
+\end{lstlisting}
+
+\subsection{How the project uses the schema}
+\begin{itemize}
+  \item \texttt{init_db.py} applies the schema to create the database file (\texttt{hospital.db}). See the code in \texttt{init_db.py} where it reads and executes \texttt{schema.sql}.
+  \item Tables mirror real-world entities: \texttt{patients}, \texttt{doctors}, \texttt{appointments}, \texttt{visits}, \texttt{prescriptions}, \texttt{bills}.
+  \item Foreign keys with ON DELETE CASCADE / SET NULL are used so deletions in parent tables cascade as appropriate — e.g., deleting a patient removes visits and bills.
+\end{itemize}
+
+\section{Data Definition Language (DDL)}
+\subsection{Theory}
+D D L commands create and modify schema objects: \texttt{CREATE TABLE}, \texttt{ALTER TABLE}, \texttt{DROP TABLE}, \texttt{CREATE INDEX}.
+
+\subsection{Exact syntax used}
+Examples are in \texttt{schema.sql}. See table creation snippets above. The project also uses a trigger creation statement in \texttt{migrate_db.py}:
+\begin{lstlisting}
+CREATE TRIGGER IF NOT EXISTS trg_create_bill_after_visit
+AFTER INSERT ON visits
+BEGIN
+    INSERT INTO bills (visit_id, patient_id, amount, status)
+    VALUES (NEW.visit_id, NEW.patient_id, 50.0, 'unpaid');
+END;
+\end{lstlisting}
+
+\subsection{How the project uses DDL}
+\begin{itemize}
+  \item \texttt{init_db.py} executes the DDL (the entire \texttt{schema.sql}) to create the tables and constraints.
+  \item \texttt{migrate_db.py} applies a trigger (DDL) to implement automatic billing after a visit is inserted.
+\end{itemize}
+
+\section{Data Manipulation Language (DML): INSERT / SELECT / UPDATE / DELETE}
+\subsection{Theory}
+DML commands change or query data: \texttt{INSERT}, \texttt{SELECT}, \texttt{UPDATE}, \texttt{DELETE}. Parameterized queries prevent SQL injection in applications.
+
+\subsection{Exact syntax examples from the code}
+Insertion (used in \texttt{init_db.py}, \texttt{seed\_data.py}, and application):
+\begin{lstlisting}
+cur.execute('INSERT INTO patients (first_name, last_name, dob, phone, email, address, insurance) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (first, last, dob, phone, email, address, insurance))
+conn.commit()
+\end{lstlisting}
+
+Select with joins (from \texttt{app.py} appointments view):
+\begin{lstlisting}
+cur.execute('''
+    SELECT a.appointment_id, a.appointment_datetime, a.status, a.reason,
+           p.patient_id, p.first_name AS patient_first, p.last_name AS patient_last,
+           d.doctor_id, d.first_name AS doctor_first, d.last_name AS doctor_last
+    FROM appointments a
+    JOIN patients p ON a.patient_id = p.patient_id
+    JOIN doctors d ON a.doctor_id = d.doctor_id
+    ORDER BY a.appointment_datetime
+''')
+rows = cur.fetchall()
+\end{lstlisting}
+
+Update example (mark a bill paid; used in scripts or could be used in app):
+\begin{lstlisting}
+cur.execute('UPDATE bills SET status = ?, paid_at = ? WHERE bill_id = ?', ('paid', paid_at_str, bill_id))
+conn.commit()
+\end{lstlisting}
+
+Delete example (used by the new web delete route in \texttt{app.py}):
+\begin{lstlisting}
+cur.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+conn.commit()
+\end{lstlisting}
+
+\subsection{How the project uses DML}
+\begin{itemize}
+  \item The Flask app and CLI perform DML for CRUD operations: add patients, schedule appointments, create visits, insert prescriptions and bills.
+  \item Parameterized queries with \texttt{?} placeholders are used throughout (see \texttt{app.py} and \texttt{cli.py}), which prevents SQL injection and is best practice.
+  \item The trigger auto-inserts bills on visit insertion (an example of DML executed by DDL-trigger logic).
+\end{itemize}
+
+\section{Constraints: Primary keys, Foreign keys, UNIQUE, NOT NULL}
+\subsection{Theory}
+Constraints keep data integrity: \texttt{PRIMARY KEY}, \texttt{FOREIGN KEY}, \texttt{UNIQUE}, \texttt{NOT NULL}, \texttt{CHECK}.
+
+\subsection{Exact syntax examples}
+From \texttt{schema.sql}:
+\begin{lstlisting}
+patient_id INTEGER PRIMARY KEY AUTOINCREMENT,
+first_name TEXT NOT NULL,
+email TEXT UNIQUE,
+FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE,
+\end{lstlisting}
+
+\subsection{How the project uses constraints}
+\begin{itemize}
+  \item Primary keys: every table defines an integer PK (e.g., \texttt{patient_id}, \texttt{doctor_id}).
+  \item NOT NULL used where the data must exist (e.g., patient first/last name, appointment_datetime).
+  \item FOREIGN KEYS enforce relationships and use ON DELETE actions (CASCADE or SET NULL) to maintain referential integrity automatically.
+  \item UNIQUE on doctor email prevents duplicate contact entries.
+\end{itemize}
+
+\section{Transactions and Atomicity}
+\subsection{Theory}
+Transactions ensure groups of statements succeed or fail together (atomicity). SQLite autocommit mode can be controlled; using \texttt{conn.commit()} writes changes; \texttt{conn.rollback()} can undo.
+
+\subsection{Exact code references}
+Code uses explicit commits after DML (see \texttt{init_db.py}, \texttt{app.py}):
+\begin{lstlisting}
+conn.commit()
+\end{lstlisting}
+
+\subsection{How the project uses transactions}
+\begin{itemize}
+  \item Database write operations call \texttt{conn.commit()} after successful inserts/updates.
+  \item The sample scripts do not explicitly wrap multiple statements in manual BEGIN/COMMIT blocks because SQLite Python driver will manage transactions around executes unless you call \texttt{isolation_level=None}. For critical multi-step changes you can use \texttt{conn.execute('BEGIN')} and explicit rollback handling.
+\end{itemize}
+
+\section{Triggers}
+\subsection{Theory}
+Triggers are database-side procedures that run automatically in response to DML events (INSERT/UPDATE/DELETE). They are useful for enforcing invariants or maintaining derived data.
+
+\subsection{Exact syntax used}
+See \texttt{migrate_db.py} for the trigger definition (quoted earlier). The trigger inserts a bill row after each new visit.
+
+\subsection{How the project uses triggers}
+\begin{itemize}
+  \item Ensures every visit that is created has an associated bill inserted automatically (business rule enforced at DB layer).
+  \item This keeps application code simpler: app inserts a visit and the DB creates billing rows.
+\end{itemize}
+
+\section{Queries, Joins and Aggregation}
+\subsection{Theory}
+Joins combine rows from multiple tables. Aggregation functions (SUM, COUNT) summarize data. GROUP BY groups result sets to aggregate per key.
+
+\subsection{Exact syntax examples from project}
+Billing report in \texttt{app.py}:
+\begin{lstlisting}
+SELECT p.patient_id, p.first_name || ' ' || p.last_name AS patient_name,
+       SUM(b.amount) AS total_billed,
+       SUM(CASE WHEN b.status = 'unpaid' THEN b.amount ELSE 0 END) AS total_unpaid
+FROM bills b
+JOIN patients p ON b.patient_id = p.patient_id
+GROUP BY p.patient_id, patient_name
+ORDER BY total_unpaid DESC
+\end{lstlisting}
+
+Doctor workload report (LEFT JOIN with date filter):
+\begin{lstlisting}
+SELECT d.doctor_id, d.first_name || ' ' || d.last_name AS doctor_name,
+       COUNT(a.appointment_id) AS upcoming_appointments
+FROM doctors d
+LEFT JOIN appointments a ON a.doctor_id = d.doctor_id
+    AND date(a.appointment_datetime) BETWEEN date('now') AND date('now', '+7 days')
+GROUP BY d.doctor_id, doctor_name
+ORDER BY upcoming_appointments DESC
+\end{lstlisting}
+
+\subsection{How the project uses queries}
+\begin{itemize}
+  \item Reports use aggregations and joins to produce dashboards (billing, doctor workload, daily appointments, overdue bills).
+  \item Application list views use JOINs to display related names (appointment page joins patients/doctors).
+\end{itemize}
+
+\section{Normalization and Design Decisions}
+\subsection{Theory}
+Normalization organizes schema to reduce redundancy (1NF, 2NF, 3NF). Sometimes controlled denormalization is used for auditability or performance.
+
+\subsection{Project choices}
+\begin{itemize}
+  \item The project models medications in a separate \texttt{medications} table, but also stores free-text \texttt{medication} on the \texttt{prescriptions} table. This gives both a canonical reference (\texttt{med_id}) and a historical record (free-text), which is a deliberate denormalization for auditability.
+  \item Many-to-one relationships (appointments → patient, doctor) are normalized.
+\end{itemize}
+
+\section{Referential Actions (ON DELETE)}
+\subsection{Theory}
+Foreign keys can specify actions like CASCADE, SET NULL, RESTRICT on delete/update to control what happens to child rows.
+
+\subsection{Examples in project}
+\begin{lstlisting}
+FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE,
+FOREIGN KEY (department_id) REFERENCES departments(department_id) ON DELETE SET NULL
+\end{lstlisting}
+
+\subsection{How the project uses them}
+\begin{itemize}
+  \item Deleting a patient cascades to appointments, visits and bills so the DB remains consistent.
+  \item Deleting a department sets department references to NULL on doctors/appointments (department is optional).
+\end{itemize}
+
+\section{Practical tips and best practices used}
+\begin{itemize}
+  \item Use parameterized queries (\texttt{?} placeholders) to avoid injection.
+  \item Keep business-critical invariants in the DB where possible (triggers, constraints).
+  \item Use explicit commits after writes to make transaction boundaries clear.
+  \item Keep seed/test data separate from schema creation (this project now initializes schema-only by default in \texttt{init_db.py}).
+\end{itemize}
+
+\section*{Appendix: File map (where to look in code)}
+\begin{longtable}{p{0.3\textwidth} p{0.65\textwidth}}
+\texttt{schema.sql} & Full DDL for tables and constraints.\
+\texttt{init_db.py} & Applies schema to create \texttt{hospital.db} (now schema-only).\
+\texttt{migrate_db.py} & Migration that creates the billing trigger.\
+\texttt{app.py} & Flask app: examples of DML (INSERT/SELECT/UPDATE/DELETE) and report queries.\
+\texttt{cli.py} & Click-based CLI commands invoking SQL for manual/automated tasks.\
+\texttt{seed_data.py} & (optional) programmatic seeder to populate mock data for demos/tests.\
+\end{longtable}
+
+\section*{Wrap up}
+This volume covered the essential DBMS concepts employed in the project and tied each concept to exact code locations/syntax used. If you'd like, I will produce Volume 2 covering intermediate topics (indexes, query tuning, concurrency, backups, testing, migrations) or expand each chapter with hands-on exercises and step-by-step walkthroughs.
+
+\end{document}

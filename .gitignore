@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite database files
+*.db
+hospital.db
+
+# Seed / reports (generated)
+seed_report.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.gz
+*.pdf
+
+# pytest cache
+.pytest_cache/
+
+# Coverage
+.coverage
+
+# OS files
+.DS_Store
+Thumbs.db

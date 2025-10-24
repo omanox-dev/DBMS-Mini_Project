@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Patient history: {{ patient['first_name'] }} {{ patient['last_name'] }}</h2>
+
+  <h4>Visits</h4>
+  <table class="table">
+    <thead><tr><th>Date</th><th>Doctor</th><th>Diagnosis</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for v in visits %}
+      <tr>
+        <td>{{ v['visit_date'] }}</td>
+        <td>{{ v['doctor_first'] }} {{ v['doctor_last'] }}</td>
+        <td>{{ v['diagnosis'] }}</td>
+        <td>{{ v['notes'] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h4>Prescriptions</h4>
+  <table class="table">
+    <thead><tr><th>Date</th><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Duration</th></tr></thead>
+    <tbody>
+    {% for p in prescriptions %}
+      <tr>
+        <td>{{ p['prescribed_at'] }}</td>
+        <td>{{ p['medication'] }}</td>
+        <td>{{ p['dosage'] }}</td>
+        <td>{{ p['frequency'] }}</td>
+        <td>{{ p['duration'] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+{% endblock %}

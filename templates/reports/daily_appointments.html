@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Today's Appointments</h2>
+  <table class="table table-striped">
+    <thead><tr><th>When</th><th>Patient</th><th>Doctor</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r['appointment_datetime'] }}</td>
+        <td>{{ r['patient_name'] }}</td>
+        <td>{{ r['doctor_name'] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

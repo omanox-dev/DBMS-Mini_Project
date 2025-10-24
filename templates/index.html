@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-md-8">
+      <h1>Healthcare Mini DBMS</h1>
+      <div class="alert alert-info mt-3" role="alert">
+        Tip: You can use the interactive CLI for a simple menu-driven experience. Run <code>py -3 interactive_cli.py</code> (or <code>python interactive_cli.py</code>) from the project folder to start it.
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Quick actions</h5>
+          <p><a href="{{ url_for('patients') }}" class="btn btn-sm btn-primary">View Patients</a>
+          <a href="{{ url_for('appointments') }}" class="btn btn-sm btn-secondary">Appointments</a></p>
+          <p><a href="{{ url_for('add_patient') }}" class="btn btn-outline-success btn-sm">Add Patient</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

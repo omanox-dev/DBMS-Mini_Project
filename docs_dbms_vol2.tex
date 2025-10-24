@@ -1,0 +1,196 @@
+% DBMS Volume 2 - Intermediate topics used in the Healthcare Mini DBMS project
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{longtable}
+\geometry{margin=1in}
+
+\definecolor{codebg}{rgb}{0.97,0.97,0.97}
+\lstset{backgroundcolor=\color{codebg},basicstyle=\ttfamily\small,breaklines=true}
+
+\title{DBMS Volume 2: Intermediate Database Concepts and Practical Techniques}
+\author{Healthcare Mini DBMS — Volume 2}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section*{Preface}
+This volume builds on Volume 1 and covers intermediate DBMS topics used or relevant to the Healthcare Mini DBMS project. Each chapter includes concise theory, exact syntax or commands used in the repository, and practical guidance for how to apply them.
+
+File locations referenced are relative to the project root (e.g. \texttt{app.py}, \texttt{migrate_db.py}, \texttt{init_db.py}, \texttt{seed_data.py}, \texttt{cli.py}).
+
+\section{Indexes}
+\subsection{Theory}
+Indexes speed up read queries by providing a fast lookup structure (B-tree in SQLite). They improve SELECT performance for WHERE, JOIN and ORDER BY clauses but slow down writes (INSERT/UPDATE/DELETE) because indexes must be updated.
+
+Types and notes:
+\begin{itemize}
+  \item Single-column index: speeds lookups on one column.
+  \item Composite index: covers multiple columns—useful when queries filter on several columns together.
+  \item UNIQUE index enforces uniqueness.
+  \item Covering index: an index that contains all columns needed by a query so the table itself need not be read.
+\end{itemize}
+
+\subsection{Exact syntax (examples)}
+Create index (suggested place: a migration script, e.g. add a new file or add statements to \texttt{migrate_db.py}):
+\begin{lstlisting}
+-- create an index to speed lookups of appointments by patient
+CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
+
+-- composite index for queries that filter by doctor and appointment date
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctor_id, appointment_datetime);
+\end{lstlisting}
+
+\subsection{How to use in project}
+Add indexes for columns used frequently in WHERE/JOIN (e.g., \texttt{appointments.patient_id}, \texttt{visits.patient_id}, \texttt{bills.patient_id}, \texttt{appointments.doctor_id}).
+
+\section{Query Planning and EXPLAIN}
+\subsection{Theory}
+\texttt{EXPLAIN QUERY PLAN} shows SQLite's chosen plan for executing a query and whether it uses an index. Use it to detect full-table scans that could be optimized by adding indexes or rewriting queries.
+
+\subsection{Exact syntax (how to run)}
+From sqlite3 CLI:
+\begin{lstlisting}
+EXPLAIN QUERY PLAN
+SELECT * FROM appointments WHERE patient_id = 123;
+\end{lstlisting}
+From Python (example snippet you can run in a script):
+\begin{lstlisting}
+conn = sqlite3.connect('hospital.db')
+cur = conn.cursor()
+cur.execute("EXPLAIN QUERY PLAN SELECT * FROM appointments WHERE patient_id = ?", (123,))
+print(cur.fetchall())
+\end{lstlisting}
+
+\subsection{How to use in project}
+If a report or page is slow, run EXPLAIN QUERY PLAN for the underlying SQL. Look for "SCAN TABLE" (full scan) and consider adding an index.
+
+\section{Advanced Transactions and WAL (Write-Ahead Logging)}
+\subsection{Theory}
+WAL mode improves concurrency in SQLite: readers do not block writers and vice-versa in many cases. Transactions guarantee atomicity; understanding isolation levels and locking in SQLite matters when multiple processes access the DB.
+
+\subsection{Exact syntax / PRAGMAs}
+Enable WAL:
+\begin{lstlisting}
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL; -- performance tradeoff
+\end{lstlisting}
+You can run these at connection time in \texttt{get_db_connection()} in \texttt{app.py}, for example:
+\begin{lstlisting}
+conn = sqlite3.connect(DB_PATH)
+conn.execute("PRAGMA foreign_keys = ON;")
+conn.execute("PRAGMA journal_mode = WAL;")
+\end{lstlisting}
+
+\subsection{How the project can use this}
+For a deployed app with concurrent reads and occasional writes, enabling WAL reduces contention. Be careful when using network filesystems—WAL and locking semantics may differ.
+
+\section{Backups and Restore}
+\subsection{Theory}
+Backups are essential. SQLite provides a safe \texttt{Connection.backup()} API to copy a live database without stopping writers.
+
+\subsection{Exact code (Python)}
+Example backup function (place in a utility module):
+\begin{lstlisting}
+def backup_db(src='hospital.db', dest='hospital_backup.db'):
+    import sqlite3
+    src_conn = sqlite3.connect(src)
+    dest_conn = sqlite3.connect(dest)
+    with dest_conn:
+        src_conn.backup(dest_conn)
+    dest_conn.close()
+    src_conn.close()
+\end{lstlisting}
+
+\subsection{How the project should use backups}
+Run periodic backups (cron/task scheduler) and before applying migrations. Keep off-site copies. When restoring, ensure the app is stopped or uses safe restore practices.
+
+\section{Migrations and Schema Evolution}
+\subsection{Theory}
+Migration scripts evolve the schema over time. Use incremental, idempotent migration scripts and a simple mechanism to record applied migrations.
+
+\subsection{Project example}
+The project has \texttt{migrate_db.py} which applies a trigger idempotently using \texttt{CREATE TRIGGER IF NOT EXISTS}. For more complex changes consider a lightweight migration table:
+\begin{lstlisting}
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  migration_id TEXT PRIMARY KEY,
+  applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+\end{lstlisting}
+Then each migration script checks whether its id is present before applying.
+
+\section{Performance tuning and vacuuming}
+\subsection{Theory}
+\texttt{VACUUM} rebuilds the database file, reclaiming space and potentially improving performance. Indexes should be created with the query workload in mind.
+
+\subsection{Exact commands}
+\begin{lstlisting}
+VACUUM;
+PRAGMA optimize; -- tries to optimize internal structures and prepared statement caches
+\end{lstlisting}
+
+\section{Testing databases: fixtures and isolation}
+\subsection{Theory}
+Unit and integration tests should run against transient test databases. Use fixtures to create/reset schema and seed minimal data for each test run.
+
+\subsection{Example pytest fixture}
+\begin{lstlisting}
+import sqlite3
+import pytest
+
+@pytest.fixture
+def db_tmp_path(tmp_path):
+    db = tmp_path / 'test.db'
+    from init_db import init_db
+    init_db(db_path=db)
+    conn = sqlite3.connect(db)
+    yield conn
+    conn.close()
+\end{lstlisting}
+
+\subsection{How the project can use tests}
+Create small fixtures that initialize the schema-only DB (\texttt{init_db.py} now uses schema-only) and then run seed routines that tests need. Keep tests fast by only inserting minimal rows.
+
+\section{Concurrency Caveats and Multi-process Access}
+\subsection{Theory}
+SQLite supports multiple readers but only one writer at a time. WAL improves concurrency, but heavy write workloads may outgrow SQLite—consider moving to a client-server RDBMS when needed.
+
+\subsection{Best practices}
+\begin{itemize}
+  \item Keep transactions short.
+  \item Use WAL for higher concurrency if deployment environment supports it.
+  \item Avoid long-running SELECTs inside transactions that also perform writes.
+\end{itemize}
+
+\section{Practical migration: adding an index safely}
+\subsection{Step-by-step example}
+\begin{enumerate}
+  \item Create migration file (e.g., \texttt{migrations/20251024_add_index_appointments_patient.sql}) containing \texttt{CREATE INDEX IF NOT EXISTS ...}.
+  \item Record migration id in \texttt{schema_migrations} table after success.
+  \item Run migration during maintenance window if necessary.
+\end{enumerate}
+
+\section{Monitoring and Observability}
+\subsection{Suggestions}
+Monitor query latency for reports, DB file size, number of indexes, page cache usage (PRAGMA cache_size), and WAL file growth. Use logging in application for slow queries.
+
+\section*{Appendix: Useful PRAGMA statements}
+\begin{lstlisting}
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL; -- or FULL for durability
+PRAGMA cache_size = 2000; -- tune for memory
+PRAGMA page_size;
+PRAGMA integrity_check; -- verify DB health
+\end{lstlisting}
+
+\section*{Wrap up and further reading}
+Volume 2 covered intermediate topics that will let you scale the project safely and diagnose performance issues. Volume 3 could cover distributed DBs, moving to PostgreSQL, advanced indexing, query optimization workflows and real-world operational considerations.
+
+\end{document}

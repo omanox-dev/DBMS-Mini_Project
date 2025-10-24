@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Schedule Appointment</h2>
+  <form method="post">
+    <div class="mb-3">
+      <label class="form-label">Patient</label>
+      <select name="patient_id" class="form-select" required>
+        {% for p in patients %}
+          <option value="{{ p['patient_id'] }}">{{ p['last_name'] }}, {{ p['first_name'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Doctor</label>
+      <select name="doctor_id" class="form-select" required>
+        {% for d in doctors %}
+          <option value="{{ d['doctor_id'] }}">{{ d['last_name'] }}, {{ d['first_name'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Date & Time</label>
+      <input name="appointment_datetime" class="form-control" placeholder="YYYY-MM-DD HH:MM" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Reason</label>
+      <input name="reason" class="form-control">
+    </div>
+    <button class="btn btn-primary">Schedule</button>
+  </form>
+{% endblock %}

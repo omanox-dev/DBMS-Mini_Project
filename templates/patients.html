@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Patients</h2>
+    <a href="{{ url_for('add_patient') }}" class="btn btn-success">Add Patient</a>
+  </div>
+
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>DOB</th>
+        <th>Phone</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in patients %}
+      <tr>
+        <td>{{ p['patient_id'] }}</td>
+        <td>{{ p['last_name'] }}, {{ p['first_name'] }}</td>
+        <td>{{ p['dob'] }}</td>
+        <td>{{ p['phone'] }}</td>
+        <td>
+          <a href="{{ url_for('patient_history', patient_id=p['patient_id']) }}" class="btn btn-sm btn-primary">History</a>
+          <form method="post" action="{{ url_for('delete_patient', patient_id=p['patient_id']) }}" style="display:inline;" onsubmit="return confirm('Delete patient and all related records? This cannot be undone.');">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

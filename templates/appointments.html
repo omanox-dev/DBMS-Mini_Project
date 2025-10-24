@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Appointments</h2>
+    <a href="{{ url_for('schedule_appointment') }}" class="btn btn-success">Schedule Appointment</a>
+  </div>
+
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Patient</th>
+        <th>Doctor</th>
+        <th>Reason</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in appointments %}
+      <tr>
+        <td>{{ a['appointment_datetime'] }}</td>
+        <td>{{ a['patient_last'] }}, {{ a['patient_first'] }}</td>
+        <td>{{ a['doctor_last'] }}, {{ a['doctor_first'] }}</td>
+        <td>{{ a['reason'] }}</td>
+        <td>{{ a['status'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

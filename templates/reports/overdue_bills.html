@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Overdue Bills (older than 30 days)</h2>
+  <table class="table table-striped">
+    <thead><tr><th>Bill ID</th><th>Issued</th><th>Patient</th><th>Amount</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r['bill_id'] }}</td>
+        <td>{{ r['issued_at'] }}</td>
+        <td>{{ r['patient_name'] }}</td>
+        <td>{{ '%.2f'|format(r['amount']) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

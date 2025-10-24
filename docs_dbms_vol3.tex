@@ -1,0 +1,178 @@
+% DBMS Volume 3 - Advanced topics: scaling, production readiness and migrations
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{color}
+\geometry{margin=1in}
+
+\definecolor{codebg}{rgb}{0.98,0.98,0.98}
+\lstset{backgroundcolor=\color{codebg},basicstyle=\ttfamily\small,breaklines=true}
+
+\title{DBMS Volume 3: Advanced Topics — Production, Scaling and Migrations}
+\author{Healthcare Mini DBMS — Volume 3}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section*{Preface}
+Volume 3 covers advanced, production-oriented DBMS topics useful if you want to run the Healthcare Mini DBMS beyond development: migrating to a client-server RDBMS (PostgreSQL), CI/CD for schema changes, backups & DR, high-availability, encryption, access controls, and auditing.
+
+Each section gives: short theory, exact commands or example code, and notes on how to apply to this project.
+
+\section{When to move from SQLite to a client-server RDBMS}
+\subsection{Theory}
+SQLite is excellent for single-process, low-write workloads and small deployments. Move to PostgreSQL/MySQL when needing:
+\begin{itemize}
+  \item concurrent writers and higher throughput
+  \item advanced features (stored procedures, materialized views, robust roles/privileges)
+  \item managed clustering, replication, and enterprise-grade backups
+\end{itemize}
+
+\subsection{Migration overview}
+\begin{enumerate}
+  \item Choose target engine (PostgreSQL recommended for features and tooling).
+  \item Convert schema: types, AUTOINCREMENT -> SERIAL/IDENTITY, adjust PRAGMA-specific settings.
+  \item Move data using ETL: sqlite dump -> CSV -> psql COPY, or use tools (pgloader).
+  \item Update application connection code (use psycopg2 or asyncpg in Python). Replace sqlite3 with psycopg2 and parameter style (%s).
+\end{enumerate}
+
+\subsection{Exact example: create table in PostgreSQL (equivalent)}
+\begin{lstlisting}
+-- PostgreSQL schema snippet (adjusted types)
+CREATE TABLE patients (
+  patient_id SERIAL PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  dob DATE,
+  gender TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  insurance TEXT
+);
+\end{lstlisting}
+
+\subsection{Application changes}
+\begin{itemize}
+  \item Replace sqlite3 connection with psycopg2: update DB path to connection string and parameter style (use %s placeholders).
+  \item Example change in \texttt{get_db_connection()} (file: \texttt{app.py}):
+\begin{lstlisting}
+import psycopg2
+def get_db_connection():
+    conn = psycopg2.connect("dbname=hospital user=hosp password=secret host=...")
+    return conn
+\end{lstlisting}
+  \item Update queries: use %s param style and commit management.
+\end{itemize}
+
+\section{CI/CD for database schema (safe migrations)}
+\subsection{Theory}
+Treat schema like code. Use versioned, idempotent migrations and a migration runner (Flyway, Liquibase, Alembic). Run migrations during deploy with safety checks and backups.
+
+\subsection{Example (Alembic for Python/SQLAlchemy)}
+\begin{itemize}
+  \item Initialize Alembic and create migration scripts that ALTER TABLE, CREATE INDEX, etc.
+  \item Use a migration history table (Alembic manages this) to avoid double-apply.
+\end{itemize}
+
+\subsection{Lightweight approach for this project}
+\begin{enumerate}
+  \item Create a \texttt{migrations/} folder with ordered files (timestamped). Each file contains SQL and an id.
+  \item Add a \texttt{schema_migrations} table in the DB to record applied migration ids.
+  \item A small runner script checks each migration file and applies unapplied migrations.
+\end{enumerate}
+
+\section{High Availability, Replication and Backups}
+\subsection{Theory}
+For production rely on managed DB services that offer replication (hot standby), point-in-time recovery (PITR), and automated backups.
+
+\subsection{Postgres examples}
+\begin{itemize}
+  \item Streaming replication + WAL archiving for PITR.
+  \item Use pg_basebackup for replica setup and configure \texttt{archive_command} for WAL shipping.
+\end{itemize}
+
+\section{Security: Authentication, Authorization and Encryption}
+\subsection{Theory}
+Secure data at rest and in transit, use strong authentication and fine-grained authorization (roles/privileges). Practice least privilege.
+
+\subsection{Exact recommendations}
+\begin{itemize}
+  \item Use TLS for DB connections (Postgres: configure server certs, client verify).
+  \item Encrypt backups and restrict access to backup stores.
+  \item Use application-level roles and enforce RBAC in the app (who can delete patients?).
+  \item Add application authentication (Flask-Login, OAuth) and only expose delete routes to admin roles.
+\end{itemize}
+
+\section{Audit Logging and Immutable History}
+\subsection{Theory}
+For healthcare data, audit trails are often required. Keep immutable logs of who changed what and when.
+
+\subsection{Implementation patterns}
+\begin{itemize}
+  \item Use triggers to write change rows to an \texttt{audit_log} table.
+  \item Or instrument application code to write audit entries when mutations occur (preferred when user context is needed).
+\end{itemize}
+
+\subsection{Example trigger (Postgres/SQLite)}
+\begin{lstlisting}
+CREATE TABLE audit_log (
+  id SERIAL PRIMARY KEY,
+  table_name TEXT,
+  operation TEXT,
+  row_id INTEGER,
+  changed_at TIMESTAMP DEFAULT now(),
+  changed_by TEXT,
+  old_data JSONB,
+  new_data JSONB
+);
+
+-- a simple SQLite trigger could INSERT into audit_log when rows are updated
+\end{lstlisting}
+
+\section{Data Privacy: anonymization and retention}
+\subsection{Theory}
+Define retention policies and anonymize or pseudonymize personal data for analytics or test environments.
+
+\subsection{Practical approach}
+\begin{itemize}
+  \item Keep production and test data separate. Use synthetic data for development (we created \texttt{seed_data.py}).
+  \item Provide anonymization scripts that replace names, emails and other PII with consistent pseudonyms.
+\end{itemize}
+
+\section{Operational runbook items}
+\begin{itemize}
+  \item Before applying migrations: take backup and run integrity check (\texttt{PRAGMA integrity_check} or \texttt{pg_dump --schema-only}).
+  \item After heavy writes: monitor WAL growth, vacuum/analyze tables (Postgres: \texttt{VACUUM ANALYZE}).
+  \item For emergency restore: document steps to restore from backups and replay WAL (PITR).
+\end{itemize}
+
+\section{Scaling patterns}
+\begin{itemize}
+  \item Read scaling: use read replicas for heavy reporting queries.
+  \item Write scaling: partitioning/sharding or move heavy write workloads to dedicated services.
+  \item Caching: introduce an application cache (Redis) for frequently accessed but not frequently updated data.
+\end{itemize}
+
+\section*{Appendix: Useful commands and tools}
+\begin{itemize}
+  \item pgloader — migrate SQLite -> PostgreSQL
+  \item pg_dump / psql — backup and restore
+  \item Alembic / Flyway — migrations
+  \item pgbench — simple benchmark tool
+\end{itemize}
+
+\section*{Wrap up}
+Volume 3 prepared you for production and scaling steps. If you'd like, I can:
+\begin{itemize}
+  \item Generate a migration plan from SQLite -> PostgreSQL for this project's schema (including sample migration scripts).
+  \item Add audit logging or role-based auth in the Flask app and restrict delete operations to admins.
+  \item Create anonymization scripts for test data and a CI job to run tests with synthetic data.
+\end{itemize}
+
+\end{document}
